@@ -1,0 +1,91 @@
+{
+    "statusCode": 200,
+    "data": [
+        {
+            "session_id": "session_db84a0cd-7b7c-43f2-9591-2eb40f95d138",
+            "website_id": "1a87e1c9-8180-4b52-9d59-22e3dc39330b",
+            "fingerprint": 176951563342210,
+            "type": "text",
+            "from": "user",
+            "origin": "chat",
+            "content": "Hello",
+            "user": {
+                "user_id": "session_db84a0cd-7b7c-43f2-9591-2eb40f95d138",
+                "nickname": "Webhook1"
+            },
+            "preview": [
+            ],
+            "mentions": [
+            ],
+            "read": "email",
+            "delivered": "email",
+            "stamped": true,
+            "timestamp": 1769515634602
+        },
+        {
+            "session_id": "session_db84a0cd-7b7c-43f2-9591-2eb40f95d138",
+            "website_id": "1a87e1c9-8180-4b52-9d59-22e3dc39330b",
+            "fingerprint": 176952101687643,
+            "type": "text",
+            "from": "user",
+            "origin": "chat",
+            "content": "I am developer",
+            "user": {
+                "user_id": "session_db84a0cd-7b7c-43f2-9591-2eb40f95d138",
+                "nickname": "Webhook1"
+            },
+            "preview": [
+            ],
+            "mentions": [
+            ],
+            "read": "chat",
+            "delivered": "",
+            "stamped": true,
+            "timestamp": 1769521019074
+        },
+        {
+            "session_id": "session_db84a0cd-7b7c-43f2-9591-2eb40f95d138",
+            "website_id": "1a87e1c9-8180-4b52-9d59-22e3dc39330b",
+            "fingerprint": 176952123394584,
+            "type": "text",
+            "from": "operator",
+            "origin": "chat",
+            "content": "Good",
+            "user": {
+                "user_id": "1af31448-27d1-4dbb-a51f-5b23d9cc1898",
+                "nickname": "Saumil"
+            },
+            "preview": [
+            ],
+            "mentions": [
+            ],
+            "read": "",
+            "delivered": "email",
+            "stamped": true,
+            "timestamp": 1769521233494
+        },
+        {
+            "session_id": "session_db84a0cd-7b7c-43f2-9591-2eb40f95d138",
+            "website_id": "1a87e1c9-8180-4b52-9d59-22e3dc39330b",
+            "fingerprint": 176952205247870,
+            "type": "text",
+            "from": "operator",
+            "origin": "chat",
+            "content": "Very good developer",
+            "user": {
+                "user_id": "1af31448-27d1-4dbb-a51f-5b23d9cc1898",
+                "nickname": "Saumil"
+            },
+            "preview": [
+            ],
+            "mentions": [
+            ],
+            "read": "",
+            "delivered": "chat",
+            "stamped": true,
+            "timestamp": 1769522052282
+        }
+    ],
+    "message": "Messages retrieved and saved successfully",
+    "pagination": null
+}

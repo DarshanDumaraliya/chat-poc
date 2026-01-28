@@ -1,0 +1,98 @@
+{
+    "id": 167,
+    "sessionId": "session_db84a0cd-7b7c-43f2-9591-2eb40f95d138",
+    "websiteId": "1a87e1c9-8180-4b52-9d59-22e3dc39330b",
+    "activeLast": "1769523280257",
+    "activeNow": false,
+    "availability": "offline",
+    "createdAtCrisp": "1769515634617",
+    "isBlocked": false,
+    "mentions": [
+    ],
+    "metaNickname": "Webhook1",
+    "metaEmail": "webhook1@gmail.com",
+    "metaPhone": "",
+    "metaAvatar": "",
+    "metaIp": "2401:4900:1f3f:72c0::",
+    "metaOrigin": "chat",
+    "metaSegments": [
+    ],
+    "metaData": {
+    },
+    "metaDevice": {
+        "geolocation": {
+            "country": "IN",
+            "region": "GJ",
+            "city": "Ahmedabad",
+            "coordinates": {
+                "latitude": 23.0276,
+                "longitude": 72.5871
+            }
+        },
+        "capabilities": [
+            "browsing",
+            "call"
+        ],
+        "locales": [
+            "en-US"
+        ],
+        "timezone": -330,
+        "system": {
+            "os": {
+                "name": "Windows",
+                "version": "10"
+            },
+            "engine": {
+                "name": "Blink",
+                "version": "144.0.0.0"
+            },
+            "browser": {
+                "name": "Chrome",
+                "version": "144.0.0.0",
+                "major": "144"
+            },
+            "useragent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+        }
+    },
+    "metaConnection": {
+        "isp": "Bharti Airtel Ltd. Telemedia Services",
+        "asn": "24560"
+    },
+    "participants": [
+    ],
+    "state": "unresolved",
+    "status": 1,
+    "unreadOperator": 0,
+    "unreadVisitor": 2,
+    "updatedAtCrisp": "1769522052282",
+    "verifications": [
+    ],
+    "lastMessage": "Very good developer",
+    "previewMessageType": "text",
+    "previewMessageFrom": "operator",
+    "previewMessageExcerpt": "Very good developer",
+    "previewMessageFingerprint": "176952205247870",
+    "waitingSince": "1769515634602",
+    "assignedUserId": "1af31448-27d1-4dbb-a51f-5b23d9cc1898",
+    "peopleId": "232ed97c-c066-4bb2-9b3e-375bd9d6fa5d",
+    "compose": {
+        "visitor": {
+            "type": "stop",
+            "timestamp": 1769521016557,
+            "excerpt": null
+        },
+        "operator": {
+            "1af31448-27d1-4dbb-a51f-5b23d9cc1898": {
+                "type": "start",
+                "timestamp": 1769522041739,
+                "excerpt": "Very good developer",
+                "user": {
+                    "nickname": "Saumil Choksi",
+                    "user_id": "1af31448-27d1-4dbb-a51f-5b23d9cc1898"
+                }
+            }
+        }
+    },
+    "createdAt": "2026-01-27T08:20:57.848Z",
+    "updatedAt": "2026-01-27T23:19:42.863Z"
+}

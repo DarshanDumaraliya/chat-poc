@@ -1,0 +1,99 @@
+{
+    "statusCode": 200,
+    "data": [
+        {
+            "id": 1149,
+            "fingerprint": "176952205247870",
+            "sessionId": "session_db84a0cd-7b7c-43f2-9591-2eb40f95d138",
+            "websiteId": "1a87e1c9-8180-4b52-9d59-22e3dc39330b",
+            "type": "text",
+            "from": "operator",
+            "origin": "chat",
+            "content": "Very good developer",
+            "userId": "1af31448-27d1-4dbb-a51f-5b23d9cc1898",
+            "userNickname": "Saumil",
+            "preview": [
+            ],
+            "mentions": [
+            ],
+            "read": "",
+            "delivered": "chat",
+            "stamped": true,
+            "timestamp": "1769522052282",
+            "createdAt": "2026-01-27T08:24:41.340Z",
+            "updatedAt": "2026-01-27T23:42:39.781Z"
+        },
+        {
+            "id": 1019,
+            "fingerprint": "176952123394584",
+            "sessionId": "session_db84a0cd-7b7c-43f2-9591-2eb40f95d138",
+            "websiteId": "1a87e1c9-8180-4b52-9d59-22e3dc39330b",
+            "type": "text",
+            "from": "operator",
+            "origin": "chat",
+            "content": "Good",
+            "userId": "1af31448-27d1-4dbb-a51f-5b23d9cc1898",
+            "userNickname": "Saumil",
+            "preview": [
+            ],
+            "mentions": [
+            ],
+            "read": "",
+            "delivered": "email",
+            "stamped": true,
+            "timestamp": "1769521233494",
+            "createdAt": "2026-01-27T08:21:04.869Z",
+            "updatedAt": "2026-01-27T23:42:39.397Z"
+        },
+        {
+            "id": 1018,
+            "fingerprint": "176952101687643",
+            "sessionId": "session_db84a0cd-7b7c-43f2-9591-2eb40f95d138",
+            "websiteId": "1a87e1c9-8180-4b52-9d59-22e3dc39330b",
+            "type": "text",
+            "from": "user",
+            "origin": "chat",
+            "content": "I am developer",
+            "userId": "session_db84a0cd-7b7c-43f2-9591-2eb40f95d138",
+            "userNickname": "Webhook1",
+            "preview": [
+            ],
+            "mentions": [
+            ],
+            "read": "chat",
+            "delivered": "",
+            "stamped": true,
+            "timestamp": "1769521019074",
+            "createdAt": "2026-01-27T08:21:04.869Z",
+            "updatedAt": "2026-01-27T23:42:39.015Z"
+        },
+        {
+            "id": 1017,
+            "fingerprint": "176951563342210",
+            "sessionId": "session_db84a0cd-7b7c-43f2-9591-2eb40f95d138",
+            "websiteId": "1a87e1c9-8180-4b52-9d59-22e3dc39330b",
+            "type": "text",
+            "from": "user",
+            "origin": "chat",
+            "content": "Hello",
+            "userId": "session_db84a0cd-7b7c-43f2-9591-2eb40f95d138",
+            "userNickname": "Webhook1",
+            "preview": [
+            ],
+            "mentions": [
+            ],
+            "read": "email",
+            "delivered": "email",
+            "stamped": true,
+            "timestamp": "1769515634602",
+            "createdAt": "2026-01-27T08:21:04.869Z",
+            "updatedAt": "2026-01-27T23:42:38.634Z"
+        }
+    ],
+    "message": "Messages retrieved from database successfully",
+    "pagination": {
+        "total": 4,
+        "page": 1,
+        "pageParRecord": 4
+    }
+}
