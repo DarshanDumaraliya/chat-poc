@@ -40,7 +40,12 @@ export class ConversationMessage {
   @Column({ name: 'user_id', type: 'varchar', length: 255, nullable: true })
   userId?: string;
 
-  @Column({ name: 'user_nickname', type: 'varchar', length: 255, nullable: true })
+  @Column({
+    name: 'user_nickname',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   userNickname?: string;
 
   @Column({ name: 'preview', type: 'json', nullable: true })
@@ -73,4 +78,3 @@ export class ConversationMessage {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }
-

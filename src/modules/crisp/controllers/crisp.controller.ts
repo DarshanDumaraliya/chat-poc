@@ -18,7 +18,7 @@ export class CrispController {
    * Automatically paginates through all pages until all conversations are fetched
    * GET /crisp/conversations/:websiteId
    * Query params: page (optional, ignored - always starts from page 1 and fetches all)
-   * 
+   *
    * This endpoint will:
    * 1. Start from page 1
    * 2. Fetch 20 conversations per page
@@ -30,7 +30,7 @@ export class CrispController {
   @Get('conversations/:websiteId')
   async listConversations(
     @Param('websiteId') websiteId: string,
-    @Query('page') page?: string
+    @Query('page') page?: string,
   ): Promise<APIResponseInterface<any>> {
     if (!websiteId) {
       throw new HttpException(
@@ -39,7 +39,7 @@ export class CrispController {
           message: 'Website ID is required',
           data: null,
         },
-        HttpStatus.BAD_REQUEST
+        HttpStatus.BAD_REQUEST,
       );
     }
 
@@ -53,7 +53,7 @@ export class CrispController {
           message: 'Page number must be a positive integer',
           data: null,
         },
-        HttpStatus.BAD_REQUEST
+        HttpStatus.BAD_REQUEST,
       );
     }
 
@@ -67,7 +67,7 @@ export class CrispController {
   @Get('messages/:websiteId/:sessionId')
   async getMessages(
     @Param('websiteId') websiteId: string,
-    @Param('sessionId') sessionId: string
+    @Param('sessionId') sessionId: string,
   ): Promise<APIResponseInterface<any>> {
     if (!websiteId || !sessionId) {
       throw new HttpException(
@@ -76,14 +76,13 @@ export class CrispController {
           message: 'Website ID and Session ID are required',
           data: null,
         },
-        HttpStatus.BAD_REQUEST
+        HttpStatus.BAD_REQUEST,
       );
     }
 
     return await this.crispService.getMessagesInConversation(
       websiteId,
-      sessionId
+      sessionId,
     );
   }
 }
-

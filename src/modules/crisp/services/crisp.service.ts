@@ -2,9 +2,14 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import * as Crisp from 'crisp-api';
-import { APIResponseInterface } from '../../../interface/response.interface';
+import {
+  APIResponseInterface,
+  Pagination,
+} from '../../../interface/response.interface';
 import { Conversation } from '../entities/conversation.entity';
 import { ConversationMessage } from '../entities/conversation-message.entity';
+import { CompletedConversation } from '../entities/completed-conversation.entity';
+import { CompletedConversationSummary } from '../entities/completed-conversation-summary.entity';
 
 @Injectable()
 export class CrispService {
@@ -15,6 +20,10 @@ export class CrispService {
     private conversationRepository: Repository<Conversation>,
     @InjectRepository(ConversationMessage)
     private conversationMessageRepository: Repository<ConversationMessage>,
+    @InjectRepository(CompletedConversation)
+    private completedConversationRepository: Repository<CompletedConversation>,
+    @InjectRepository(CompletedConversationSummary)
+    private completedConversationSummaryRepository: Repository<CompletedConversationSummary>,
   ) {
     this.crispClient = new Crisp.default();
     const identifier = process.env.CRISP_IDENTIFIER;
@@ -23,7 +32,7 @@ export class CrispService {
 
     if (!identifier || !key) {
       throw new Error(
-        'Crisp API credentials are missing. Please set CRISP_IDENTIFIER and CRISP_KEY environment variables.'
+        'Crisp API credentials are missing. Please set CRISP_IDENTIFIER and CRISP_KEY environment variables.',
       );
     }
 
@@ -39,7 +48,9 @@ export class CrispService {
   /**
    * Transform API conversation data to entity format
    */
-  private transformConversationData(conversationData: any): Partial<Conversation> {
+  private transformConversationData(
+    conversationData: any,
+  ): Partial<Conversation> {
     return {
       sessionId: conversationData.session_id,
       websiteId: conversationData.website_id,
@@ -82,10 +93,10 @@ export class CrispService {
    * Save or update conversation in database
    */
   private async saveOrUpdateConversation(
-    conversationData: any
+    conversationData: any,
   ): Promise<Conversation> {
     const conversationEntity = this.transformConversationData(conversationData);
-    
+
     // Check if conversation exists
     const existingConversation = await this.conversationRepository.findOne({
       where: { sessionId: conversationEntity.sessionId },
@@ -97,7 +108,8 @@ export class CrispService {
       return await this.conversationRepository.save(existingConversation);
     } else {
       // Create new conversation
-      const newConversation = this.conversationRepository.create(conversationEntity);
+      const newConversation =
+        this.conversationRepository.create(conversationEntity);
       return await this.conversationRepository.save(newConversation);
     }
   }
@@ -108,7 +120,7 @@ export class CrispService {
    * @returns Number of messages saved
    */
   private async fetchAndBulkSaveMessages(
-    conversations: any[]
+    conversations: any[],
   ): Promise<number> {
     if (!Array.isArray(conversations) || conversations.length === 0) {
       return 0;
@@ -122,13 +134,22 @@ export class CrispService {
           .catch((error) => {
             console.error(
               `Error fetching messages for session ${conv.session_id}:`,
-              error.message
+              error.message,
             );
             return []; // Return empty array on error to continue processing
-          })
+          }),
       );
 
       const messagesArrays = await Promise.all(messagePromises);
+
+      // Sync completed_conversation for each conversation (resolved vs unresolved)
+      for (let i = 0; i < conversations.length; i++) {
+        const conv = conversations[i];
+        const messages = Array.isArray(messagesArrays[i])
+          ? messagesArrays[i]
+          : [];
+        await this.syncCompletedConversationFromBulk(conv, messages);
+      }
 
       // Flatten all messages into a single array
       const allMessages: any[] = [];
@@ -149,7 +170,10 @@ export class CrispService {
         if (fingerprint !== undefined && fingerprint !== null) {
           // If fingerprint already exists, keep the one with higher timestamp (latest)
           const existing = messagesMap.get(fingerprint);
-          if (!existing || (msg.timestamp && msg.timestamp > (existing.timestamp || 0))) {
+          if (
+            !existing ||
+            (msg.timestamp && msg.timestamp > (existing.timestamp || 0))
+          ) {
             messagesMap.set(fingerprint, msg);
           }
         }
@@ -164,7 +188,7 @@ export class CrispService {
 
       // Transform all messages to entity format
       const messageEntities = uniqueMessages.map((msg) =>
-        this.transformMessageData(msg)
+        this.transformMessageData(msg),
       );
 
       if (messageEntities.length === 0) {
@@ -172,98 +196,97 @@ export class CrispService {
       }
 
       // Get all unique fingerprints to check existing messages
-      const fingerprints = Array.from(new Set(
-        messageEntities
-          .map((msg) => msg.fingerprint)
-          .filter((fp) => fp !== undefined && fp !== null) as number[]
-      ));
+      const fingerprints = Array.from(
+        new Set(
+          messageEntities
+            .map((msg) => msg.fingerprint)
+            .filter((fp) => fp !== undefined && fp !== null),
+        ),
+      );
 
       if (fingerprints.length === 0) {
         return 0;
       }
 
-      // Find existing messages by fingerprint using In operator
+      // Find existing messages by fingerprint (use string key for consistent lookup with bigint)
       const existingMessages = await this.conversationMessageRepository.find({
         where: { fingerprint: In(fingerprints) },
       });
+      const existingByFp = new Map<string, ConversationMessage>();
+      existingMessages.forEach((msg) => {
+        const k = String(msg.fingerprint);
+        if (!existingByFp.has(k)) existingByFp.set(k, msg);
+      });
 
-      const existingFingerprintsMap = new Map(
-        existingMessages.map((msg) => [msg.fingerprint, msg])
-      );
-
-      // Separate new and existing messages
-      const messagesToInsertMap = new Map<number, Partial<ConversationMessage>>();
+      // Separate update vs insert (normalize fingerprint for map lookup)
       const messagesToUpdate: ConversationMessage[] = [];
-
+      const messagesToInsertMap = new Map<
+        string,
+        Partial<ConversationMessage>
+      >();
       messageEntities.forEach((msgData) => {
-        if (!msgData.fingerprint) {
-          return; // Skip messages without fingerprint
-        }
-
-        if (existingFingerprintsMap.has(msgData.fingerprint)) {
-          // Update existing message
-          const existing = existingFingerprintsMap.get(msgData.fingerprint)!;
+        if (msgData.fingerprint == null) return;
+        const key = String(msgData.fingerprint);
+        const existing = existingByFp.get(key);
+        if (existing) {
           Object.assign(existing, msgData);
           messagesToUpdate.push(existing);
         } else {
-          // New message to insert - use map to ensure no duplicates
-          // If same fingerprint appears multiple times, keep the latest one
-          const existingInInsert = messagesToInsertMap.get(msgData.fingerprint);
-          if (!existingInInsert || (msgData.timestamp && msgData.timestamp > (existingInInsert.timestamp || 0))) {
-            messagesToInsertMap.set(msgData.fingerprint, msgData);
+          const prev = messagesToInsertMap.get(key);
+          if (
+            !prev ||
+            (msgData.timestamp && msgData.timestamp > (prev.timestamp ?? 0))
+          ) {
+            messagesToInsertMap.set(key, msgData);
           }
         }
       });
 
-      // Convert map to array for insertion
       const messagesToInsert = Array.from(messagesToInsertMap.values());
-
       let savedCount = 0;
 
-      // Bulk insert new messages with error handling for duplicates
-      if (messagesToInsert.length > 0) {
+      // Upsert each "new" message: find by fingerprint first (handles race with RTM), then update or insert
+      for (const msgData of messagesToInsert) {
         try {
-          const newEntities = messagesToInsert.map((msgData) =>
-            this.conversationMessageRepository.create(msgData)
-          );
-          const inserted = await this.conversationMessageRepository.save(newEntities);
-          savedCount += inserted.length;
-        } catch (error: any) {
-          // If bulk insert fails due to duplicates, try individual inserts with upsert
-          // PostgreSQL error code for unique constraint violation
-          if (error.code === '23505') {
-            console.warn('Bulk insert failed due to duplicates, falling back to individual upserts');
-            for (const msgData of messagesToInsert) {
-              try {
-                const entity = this.conversationMessageRepository.create(msgData);
-                await this.conversationMessageRepository.save(entity);
-                savedCount++;
-              } catch (individualError: any) {
-                // If still duplicate, try to update instead
-                // PostgreSQL error code for unique constraint violation
-                if (individualError.code === '23505' && msgData.fingerprint) {
-                  const existing = await this.conversationMessageRepository.findOne({
-                    where: { fingerprint: msgData.fingerprint },
-                  });
-                  if (existing) {
-                    Object.assign(existing, msgData);
-                    await this.conversationMessageRepository.save(existing);
-                    savedCount++;
-                  }
-                } else {
-                  console.error(`Error saving message with fingerprint ${msgData.fingerprint}:`, individualError.message);
+          const existing = await this.conversationMessageRepository.findOne({
+            where: { fingerprint: msgData.fingerprint },
+          });
+          if (existing) {
+            Object.assign(existing, msgData);
+            await this.conversationMessageRepository.save(existing);
+            savedCount++;
+          } else {
+            const entity =
+              this.conversationMessageRepository.create(msgData);
+            try {
+              await this.conversationMessageRepository.save(entity);
+              savedCount++;
+            } catch (insertErr: any) {
+              if (insertErr?.code === '23505') {
+                const again = await this.conversationMessageRepository.findOne({
+                  where: { fingerprint: msgData.fingerprint },
+                });
+                if (again) {
+                  Object.assign(again, msgData);
+                  await this.conversationMessageRepository.save(again);
+                  savedCount++;
                 }
+              } else {
+                throw insertErr;
               }
             }
-          } else {
-            throw error;
           }
+        } catch (err: any) {
+          console.error(
+            `Error upserting message fingerprint ${msgData.fingerprint}:`,
+            err?.message ?? err,
+          );
         }
       }
 
-      // Bulk update existing messages
       if (messagesToUpdate.length > 0) {
-        const updated = await this.conversationMessageRepository.save(messagesToUpdate);
+        const updated =
+          await this.conversationMessageRepository.save(messagesToUpdate);
         savedCount += updated.length;
       }
 
@@ -283,39 +306,46 @@ export class CrispService {
    */
   async listConversations(
     websiteId: string,
-    pageNumber: number = 1
+    pageNumber: number = 1,
   ): Promise<APIResponseInterface<any>> {
     try {
       const options = {
-        per_page: 20
+        per_page: 20,
       };
-      
+
       const allConversations: any[] = [];
       const allSavedConversations: Conversation[] = [];
       let currentPage = 1;
       let totalMessagesSaved = 0;
       let hasMorePages = true;
 
-      console.log(`Starting to fetch all conversations for website: ${websiteId}`);
+      console.log(
+        `Starting to fetch all conversations for website: ${websiteId}`,
+      );
 
       // Loop through pages until we get less than 20 conversations
       while (hasMorePages) {
         try {
           console.log(`Fetching page ${currentPage}...`);
-          
-          const conversations = await this.crispClient.website.listConversations(
-            websiteId,
-            currentPage,
-            options
-          );
+
+          const conversations =
+            await this.crispClient.website.listConversations(
+              websiteId,
+              currentPage,
+              options,
+            );
 
           if (!Array.isArray(conversations) || conversations.length === 0) {
-            console.log(`No conversations found on page ${currentPage}. Stopping pagination.`);
+            console.log(
+              `No conversations found on page ${currentPage}. Stopping pagination.`,
+            );
             hasMorePages = false;
             break;
           }
 
-          console.log(`Fetched ${conversations.length} conversations from page ${currentPage}`);
+          console.log(
+            `Fetched ${conversations.length} conversations from page ${currentPage}`,
+          );
 
           // Add to accumulated list
           allConversations.push(...conversations);
@@ -327,20 +357,28 @@ export class CrispService {
           }
 
           // Fetch and bulk save messages for this batch of conversations
-          const messagesSaved = await this.fetchAndBulkSaveMessages(conversations);
+          const messagesSaved =
+            await this.fetchAndBulkSaveMessages(conversations);
           totalMessagesSaved += messagesSaved;
-          console.log(`Bulk saved ${messagesSaved} messages for ${conversations.length} conversations from page ${currentPage}`);
+          console.log(
+            `Bulk saved ${messagesSaved} messages for ${conversations.length} conversations from page ${currentPage}`,
+          );
 
           // If we got less than 20 conversations, we've reached the end
           if (conversations.length < 20) {
-            console.log(`Received ${conversations.length} conversations (less than 20). Reached end of pagination.`);
+            console.log(
+              `Received ${conversations.length} conversations (less than 20). Reached end of pagination.`,
+            );
             hasMorePages = false;
           } else {
             // Move to next page
             currentPage++;
           }
         } catch (pageError) {
-          console.error(`Error fetching page ${currentPage}:`, pageError.message);
+          console.error(
+            `Error fetching page ${currentPage}:`,
+            pageError.message,
+          );
           // If there's an error on a page, stop pagination
           hasMorePages = false;
           // If this is the first page and it fails, throw the error
@@ -352,7 +390,9 @@ export class CrispService {
         }
       }
 
-      console.log(`Completed fetching all conversations. Total: ${allConversations.length} conversations, ${totalMessagesSaved} messages saved across ${currentPage} page(s)`);
+      console.log(
+        `Completed fetching all conversations. Total: ${allConversations.length} conversations, ${totalMessagesSaved} messages saved across ${currentPage} page(s)`,
+      );
 
       return {
         code: HttpStatus.OK,
@@ -371,7 +411,7 @@ export class CrispService {
           message: error.message || 'Failed to retrieve conversations',
           data: null,
         },
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
@@ -400,26 +440,36 @@ export class CrispService {
   }
 
   /**
-   * Save or update message in database
+   * Save or update message in database (upsert by fingerprint).
+   * If row already exists (e.g. from RTM), updates it instead of failing.
    */
   private async saveOrUpdateMessage(
-    messageData: any
+    messageData: any,
   ): Promise<ConversationMessage> {
-          const messageEntity = this.transformMessageData(messageData);
-    
-    // Check if message exists
-    const existingMessage = await this.conversationMessageRepository.findOne({
+    const messageEntity = this.transformMessageData(messageData);
+
+    let existing = await this.conversationMessageRepository.findOne({
       where: { fingerprint: messageEntity.fingerprint },
     });
-
-    if (existingMessage) {
-      // Update existing message
-      Object.assign(existingMessage, messageEntity);
-      return await this.conversationMessageRepository.save(existingMessage);
-    } else {
-      // Create new message
-      const newMessage = this.conversationMessageRepository.create(messageEntity);
+    if (existing) {
+      Object.assign(existing, messageEntity);
+      return await this.conversationMessageRepository.save(existing);
+    }
+    const newMessage =
+      this.conversationMessageRepository.create(messageEntity);
+    try {
       return await this.conversationMessageRepository.save(newMessage);
+    } catch (err: any) {
+      if (err?.code === '23505') {
+        existing = await this.conversationMessageRepository.findOne({
+          where: { fingerprint: messageEntity.fingerprint },
+        });
+        if (existing) {
+          Object.assign(existing, messageEntity);
+          return await this.conversationMessageRepository.save(existing);
+        }
+      }
+      throw err;
     }
   }
 
@@ -431,12 +481,12 @@ export class CrispService {
    */
   async getMessagesInConversation(
     websiteId: string,
-    sessionId: string
+    sessionId: string,
   ): Promise<APIResponseInterface<any>> {
     try {
       const messages = await this.crispClient.website.getMessagesInConversation(
         websiteId,
-        sessionId
+        sessionId,
       );
 
       // Save/update messages in database
@@ -460,7 +510,7 @@ export class CrispService {
           message: error.message || 'Failed to retrieve messages',
           data: null,
         },
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
@@ -475,21 +525,32 @@ export class CrispService {
   async getAllConversationsFromDb(
     page: number = 1,
     limit: number = 10,
-    websiteId?: string
+    websiteId?: string,
   ): Promise<APIResponseInterface<any>> {
     try {
       const skip = (page - 1) * limit;
-      
+
       // Build query
-      const queryBuilder = this.conversationRepository.createQueryBuilder('conversation');
-      
+      const queryBuilder =
+        this.conversationRepository.createQueryBuilder('conversation');
+
       if (websiteId) {
-        queryBuilder.where('conversation.websiteId = :websiteId', { websiteId });
+        queryBuilder.where('conversation.websiteId = :websiteId', {
+          websiteId,
+        });
       }
-      
+
       // Get total count
       const total = await queryBuilder.getCount();
-      
+
+      // Global resolved / unresolved counts (same filters as list)
+      const resolvedCount = await this.conversationRepository
+        .createQueryBuilder('conversation')
+        .where(websiteId ? 'conversation.websiteId = :websiteId' : '1=1', websiteId ? { websiteId } : {})
+        .andWhere('conversation.state = :state', { state: 'resolved' })
+        .getCount();
+      const unresolvedCount = total - resolvedCount;
+
       // Get paginated results
       const conversations = await queryBuilder
         .orderBy('conversation.updatedAtCrisp', 'DESC')
@@ -505,16 +566,19 @@ export class CrispService {
           total,
           page,
           pageParRecord: conversations.length,
-        },
+          resolvedCount,
+          unresolvedCount,
+        } as Pagination,
       };
     } catch (error) {
       throw new HttpException(
         {
           code: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: error.message || 'Failed to retrieve conversations from database',
+          message:
+            error.message || 'Failed to retrieve conversations from database',
           data: null,
         },
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
@@ -529,16 +593,16 @@ export class CrispService {
   async getMessagesByConversationIdFromDb(
     sessionId: string,
     page: number = 1,
-    limit: number = 10
+    limit: number = 10,
   ): Promise<APIResponseInterface<any>> {
     try {
       const skip = (page - 1) * limit;
-      
+
       // Get total count
       const total = await this.conversationMessageRepository.count({
         where: { sessionId },
       });
-      
+
       // Get paginated results
       const messages = await this.conversationMessageRepository.find({
         where: { sessionId },
@@ -564,7 +628,7 @@ export class CrispService {
           message: error.message || 'Failed to retrieve messages from database',
           data: null,
         },
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
@@ -578,8 +642,9 @@ export class CrispService {
     try {
       // Get count before deletion
       const countBefore = await this.conversationRepository.count();
-      const messagesCountBefore = await this.conversationMessageRepository.count();
-      
+      const messagesCountBefore =
+        await this.conversationMessageRepository.count();
+
       // Use DELETE query instead of TRUNCATE to respect foreign key constraints
       // Messages will be cascade deleted automatically due to CASCADE relationship
       await this.conversationRepository
@@ -588,7 +653,7 @@ export class CrispService {
         .from(Conversation)
         .execute();
 
-      return {  
+      return {
         code: HttpStatus.OK,
         message: `Successfully deleted ${countBefore} conversation(s) and ${messagesCountBefore} related message(s)`,
         data: {
@@ -600,10 +665,11 @@ export class CrispService {
       throw new HttpException(
         {
           code: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: error.message || 'Failed to delete conversations from database',
+          message:
+            error.message || 'Failed to delete conversations from database',
           data: null,
         },
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
@@ -616,7 +682,7 @@ export class CrispService {
     try {
       // Get count before deletion
       const countBefore = await this.conversationMessageRepository.count();
-      
+
       // Use DELETE query instead of TRUNCATE to respect foreign key constraints
       await this.conversationMessageRepository
         .createQueryBuilder()
@@ -638,9 +704,279 @@ export class CrispService {
           message: error.message || 'Failed to delete messages from database',
           data: null,
         },
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * During bulk migration: sync completed_conversation from in-memory conversation + messages.
+   * - If state === 'resolved': upsert row with session_json = { session, messages }, is_active = true.
+   * - If state !== 'resolved': if row exists, set is_active = false.
+   */
+  private async syncCompletedConversationFromBulk(
+    conversationData: any,
+    messages: any[],
+  ): Promise<void> {
+    const sessionId = conversationData?.session_id;
+    const websiteId = conversationData?.website_id;
+    if (!sessionId) return;
+
+    try {
+      const state = conversationData?.state;
+
+      if (state === 'resolved') {
+        const sessionJson = {
+          session: conversationData,
+          messages: Array.isArray(messages) ? messages : [],
+        };
+        const existing =
+          await this.completedConversationRepository.findOne({
+            where: { sessionId },
+          });
+        if (existing) {
+          existing.sessionJson = sessionJson;
+          existing.isActive = true;
+          await this.completedConversationRepository.save(existing);
+        } else {
+          const row = this.completedConversationRepository.create({
+            sessionId,
+            sessionJson,
+            isActive: true,
+          });
+          await this.completedConversationRepository.save(row);
+        }
+        await this.generateAndSaveSummary(sessionId, sessionJson);
+      } else {
+        const existing =
+          await this.completedConversationRepository.findOne({
+            where: { sessionId },
+          });
+        if (existing) {
+          existing.isActive = false;
+          await this.completedConversationRepository.save(existing);
+        }
+        await this.setSummaryInactive(sessionId);
+      }
+    } catch (error: any) {
+      console.error(
+        `syncCompletedConversationFromBulk for ${sessionId}:`,
+        error?.message ?? error,
+      );
+    }
+  }
+
+  /**
+   * Call Anthropic Haiku 4.5 to summarize session JSON and upsert into completed_conversation_summary.
+   */
+  async generateAndSaveSummary(
+    sessionId: string,
+    sessionJson: Record<string, any>,
+  ): Promise<void> {
+    const apiKey =
+      process.env.AI_API_KEY ?? process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      console.warn(
+        'AI_API_KEY (or ANTHROPIC_API_KEY) not set; skipping summary generation',
+      );
+      return;
+    }
+
+    try {
+      const prompt = `Summarize this customer support conversation in 2-4 concise sentences. Focus on: topic, outcome, and any follow-up needed. Conversation data (JSON):\n${JSON.stringify(sessionJson)}`;
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Anthropic API ${response.status}: ${errText}`);
+      }
+
+      const data = (await response.json()) as {
+        content?: Array<{ type: string; text?: string }>;
+      };
+      const text =
+        data?.content?.find((c) => c.type === 'text')?.text?.trim() ?? '';
+
+      const existing = await this.completedConversationSummaryRepository.findOne({
+        where: { sessionId },
+      });
+      if (existing) {
+        existing.summary = text || null;
+        existing.isActive = true;
+        await this.completedConversationSummaryRepository.save(existing);
+      } else {
+        const row = this.completedConversationSummaryRepository.create({
+          sessionId,
+          summary: text || null,
+          isActive: true,
+        });
+        await this.completedConversationSummaryRepository.save(row);
+      }
+    } catch (error: any) {
+      console.error(
+        `generateAndSaveSummary for ${sessionId}:`,
+        error?.message ?? error,
+      );
+    }
+  }
+
+  /**
+   * Set completed_conversation_summary.is_active = false for the given session.
+   */
+  async setSummaryInactive(sessionId: string): Promise<void> {
+    try {
+      const existing = await this.completedConversationSummaryRepository.findOne({
+        where: { sessionId },
+      });
+      if (existing) {
+        existing.isActive = false;
+        await this.completedConversationSummaryRepository.save(existing);
+      }
+    } catch (error: any) {
+      console.error(
+        `setSummaryInactive for ${sessionId}:`,
+        error?.message ?? error,
+      );
+    }
+  }
+
+  /**
+   * Get completed conversations from local database (paginated).
+   * Query params: page, limit, sessionId (optional filter).
+   */
+  async getCompletedConversationsFromDb(
+    page: number = 1,
+    limit: number = 10,
+    sessionId?: string,
+  ): Promise<APIResponseInterface<any>> {
+    try {
+      const skip = (page - 1) * limit;
+      const queryBuilder = this.completedConversationRepository
+        .createQueryBuilder('completed_conversation');
+
+      queryBuilder.where(
+        'completed_conversation.is_active = true',
+        { sessionId },
+      );
+
+      if (sessionId) {
+        queryBuilder.where(
+          'completed_conversation.session_id = :sessionId',
+          { sessionId },
+        );
+      }
+
+      const total = await queryBuilder.getCount();
+      const rows = await queryBuilder
+        .orderBy('completed_conversation.updated_at', 'DESC')
+        .skip(skip)
+        .take(limit)
+        .getMany();
+
+      return {
+        code: HttpStatus.OK,
+        message: 'Completed conversations fetched successfully',
+        data: rows,
+
+        pagination: {
+          total,
+          page,
+          pageParRecord: rows.length,
+        },
+      };
+    } catch (error) {
+      throw new HttpException(
+        {
+          code: HttpStatus.INTERNAL_SERVER_ERROR,
+          message:
+            error.message ||
+            'Failed to fetch completed conversations from database',
+          data: null,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * Get a single completed conversation by session_id.
+   */
+  async getCompletedConversationBySessionIdFromDb(
+    sessionId: string,
+  ): Promise<APIResponseInterface<any>> {
+    try {
+      const row = await this.completedConversationRepository.findOne({
+        where: { sessionId },
+      });
+      return {
+        code: HttpStatus.OK,
+        message: row
+          ? 'Completed conversation fetched successfully'
+          : 'No completed conversation found for this session',
+        data: row ?? null,
+      };
+    } catch (error) {
+      throw new HttpException(
+        {
+          code: HttpStatus.INTERNAL_SERVER_ERROR,
+          message:
+            error.message ||
+            'Failed to fetch completed conversation from database',
+          data: null,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * Get completed conversation summary by session ID from local database.
+   */
+  async getSummaryBySessionIdFromDb(
+    sessionId: string,
+  ): Promise<APIResponseInterface<any>> {
+    try {
+      const row = await this.completedConversationSummaryRepository.findOne({
+        where: { sessionId },
+      });
+      if (!row) {
+        throw new HttpException(
+          {
+            code: HttpStatus.NOT_FOUND,
+            message: 'No summary found for this session',
+            data: null,
+          },
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      return {
+        code: HttpStatus.OK,
+        message: 'Summary fetched successfully',
+        data: row,
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        {
+          code: HttpStatus.INTERNAL_SERVER_ERROR,
+          message:
+            error?.message || 'Failed to fetch summary from database',
+          data: null,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
 }
-

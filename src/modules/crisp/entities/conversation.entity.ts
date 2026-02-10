@@ -40,7 +40,12 @@ export class Conversation {
   mentions?: any[];
 
   // Meta fields
-  @Column({ name: 'meta_nickname', type: 'varchar', length: 255, nullable: true })
+  @Column({
+    name: 'meta_nickname',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   metaNickname?: string;
 
   @Column({ name: 'meta_email', type: 'varchar', length: 255, nullable: true })
@@ -94,22 +99,41 @@ export class Conversation {
   @Column({ name: 'last_message', type: 'text', nullable: true })
   lastMessage?: string;
 
-  @Column({ name: 'preview_message_type', type: 'varchar', length: 50, nullable: true })
+  @Column({
+    name: 'preview_message_type',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
   previewMessageType?: string;
 
-  @Column({ name: 'preview_message_from', type: 'varchar', length: 50, nullable: true })
+  @Column({
+    name: 'preview_message_from',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
   previewMessageFrom?: string;
 
   @Column({ name: 'preview_message_excerpt', type: 'text', nullable: true })
   previewMessageExcerpt?: string;
 
-  @Column({ name: 'preview_message_fingerprint', type: 'bigint', nullable: true })
+  @Column({
+    name: 'preview_message_fingerprint',
+    type: 'bigint',
+    nullable: true,
+  })
   previewMessageFingerprint?: number;
 
   @Column({ name: 'waiting_since', type: 'bigint', nullable: true })
   waitingSince?: number;
 
-  @Column({ name: 'assigned_user_id', type: 'varchar', length: 255, nullable: true })
+  @Column({
+    name: 'assigned_user_id',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   assignedUserId?: string;
 
   @Column({ name: 'people_id', type: 'varchar', length: 255, nullable: true })
@@ -127,4 +151,3 @@ export class Conversation {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }
-

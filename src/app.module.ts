@@ -10,10 +10,7 @@ import dbDataSource from './database/databaseConfig';
 import { CrispModule } from './modules/crisp/crisp.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forRoot(dbDataSource.options),
-    CrispModule,
-  ],
+  imports: [TypeOrmModule.forRoot(dbDataSource.options), CrispModule],
   controllers: [AppController],
   providers: [
     AppService,

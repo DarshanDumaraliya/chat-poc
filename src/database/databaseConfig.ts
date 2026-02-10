@@ -12,16 +12,18 @@ const ormDBconfig: PostgresConnectionOptions | any = {
   username: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  ssl: process.env.DB_SSL === 'false' || process.env.DB_SSL === '0'
-    ? false
-    : {
-        rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
-      },
+  ssl:
+    process.env.DB_SSL === 'false' || process.env.DB_SSL === '0'
+      ? false
+      : {
+          rejectUnauthorized:
+            process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
+        },
   namingStrategy: new SnakeNamingStrategy(),
   synchronize: true,
   logging: true,
 };
-  
+
 const dbDataSource = new DataSource({
   ...ormDBconfig,
   entities: [join(__dirname, '../modules/**/entities/*.entity.{ts,js}')],
@@ -30,6 +32,6 @@ const dbDataSource = new DataSource({
   cli: {
     migrationsDir: 'src/database/migrations',
   },
-}); 
+});
 
 export default dbDataSource;

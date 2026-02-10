@@ -17,7 +17,7 @@ export class CrispDbController {
   /**
    * Get all conversations from local database
    * GET /crisp-db/conversations
-   * Query params: 
+   * Query params:
    *   - page (optional, default: 1)
    *   - limit (optional, default: 10)
    *   - websiteId (optional, filter by website ID)
@@ -38,7 +38,7 @@ export class CrispDbController {
           message: 'Page number must be a positive integer',
           data: null,
         },
-        HttpStatus.BAD_REQUEST
+        HttpStatus.BAD_REQUEST,
       );
     }
 
@@ -49,14 +49,14 @@ export class CrispDbController {
           message: 'Limit must be a positive integer between 1 and 100',
           data: null,
         },
-        HttpStatus.BAD_REQUEST
+        HttpStatus.BAD_REQUEST,
       );
     }
 
     return await this.crispService.getAllConversationsFromDb(
       pageNumber,
       pageLimit,
-      websiteId
+      websiteId,
     );
   }
 
@@ -80,7 +80,7 @@ export class CrispDbController {
           message: 'Session ID is required',
           data: null,
         },
-        HttpStatus.BAD_REQUEST
+        HttpStatus.BAD_REQUEST,
       );
     }
 
@@ -94,7 +94,7 @@ export class CrispDbController {
           message: 'Page number must be a positive integer',
           data: null,
         },
-        HttpStatus.BAD_REQUEST
+        HttpStatus.BAD_REQUEST,
       );
     }
 
@@ -105,37 +105,126 @@ export class CrispDbController {
           message: 'Limit must be a positive integer between 1 and 100',
           data: null,
         },
-        HttpStatus.BAD_REQUEST
+        HttpStatus.BAD_REQUEST,
       );
     }
 
     return await this.crispService.getMessagesByConversationIdFromDb(
       sessionId,
       pageNumber,
-      pageLimit
+      pageLimit,
     );
   }
 
   /**
    * Delete all conversations from local database
    * DELETE /crisp-db/conversations
-   * 
+   *
    * WARNING: This will delete all conversation records and cascade delete all related messages
    */
   @Delete('conversations')
   async deleteAllConversations(): Promise<APIResponseInterface<any>> {
     return await this.crispService.deleteAllConversationsFromDb();
   }
-
+  /*  
   /**
    * Delete all messages from local database
    * DELETE /crisp-db/messages
-   * 
+   *
    * WARNING: This will delete all message records
    */
   @Delete('messages')
   async deleteAllMessages(): Promise<APIResponseInterface<any>> {
     return await this.crispService.deleteAllMessagesFromDb();
   }
-}
 
+  /**
+   * Get completed conversations from local database
+   * GET /crisp-db/completed-conversations
+   * Query params:
+   *   - page (optional, default: 1)
+   *   - limit (optional, default: 10)
+   *   - sessionId (optional, filter by session ID)
+   */
+  @Get('completed-conversations')
+  async getCompletedConversations(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('sessionId') sessionId?: string,
+  ): Promise<APIResponseInterface<any>> {
+    const pageNumber = page ? parseInt(page, 10) : 1;
+    const pageLimit = limit ? parseInt(limit, 10) : 10;
+
+    if (isNaN(pageNumber) || pageNumber < 1) {
+      throw new HttpException(
+        {
+          code: HttpStatus.BAD_REQUEST,
+          message: 'Page number must be a positive integer',
+          data: null,
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (isNaN(pageLimit) || pageLimit < 1 || pageLimit > 100) {
+      throw new HttpException(
+        {
+          code: HttpStatus.BAD_REQUEST,
+          message: 'Limit must be a positive integer between 1 and 100',
+          data: null,
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    return await this.crispService.getCompletedConversationsFromDb(
+      pageNumber,
+      pageLimit,
+      sessionId,
+    );
+  }
+
+  /**
+   * Get a single completed conversation by session ID
+   * GET /crisp-db/completed-conversations/:sessionId
+   */
+  @Get('completed-conversations/:sessionId')
+  async getCompletedConversationBySessionId(
+    @Param('sessionId') sessionId: string,
+  ): Promise<APIResponseInterface<any>> {
+    if (!sessionId) {
+      throw new HttpException(
+        {
+          code: HttpStatus.BAD_REQUEST,
+          message: 'Session ID is required',
+          data: null,
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    return await this.crispService.getCompletedConversationBySessionIdFromDb(
+      sessionId,
+    );
+  }
+
+  /**
+   * Get completed conversation summary by session ID
+   * GET /crisp-db/summary/:sessionId
+   */
+  @Get('summary/:sessionId')
+  async getSummaryBySessionId(
+    @Param('sessionId') sessionId: string,
+  ): Promise<APIResponseInterface<any>> {
+    if (!sessionId) {
+      throw new HttpException(
+        {
+          code: HttpStatus.BAD_REQUEST,
+          message: 'Session ID is required',
+          data: null,
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    return await this.crispService.getSummaryBySessionIdFromDb(sessionId);
+  }
+}
